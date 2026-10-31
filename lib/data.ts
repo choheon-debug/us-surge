@@ -2,7 +2,7 @@
 import { haltsOn, type HaltItem } from "./halts";
 import { pastMovers, polygonReady, todayMovers, type Mover } from "./movers";
 import { pool } from "./http";
-import { etHm, isTradingDay, marketOpen, todayEt } from "./time";
+import { etHm, isTradingDay, lastTradingDay, marketOpen, todayEt } from "./time";
 import { dayStats } from "./yahoo";
 import type { Day, Row } from "./types";
 
@@ -15,9 +15,10 @@ export async function day(date: string): Promise<Day> {
   const notes: string[] = [];
   if (!isTradingDay(date) || date > todayEt()) return { date, live: false, asOf: "", halts: [], gainers: [], notes };
 
-  const [hs, mv] = await Promise.all([haltsOn(date), today ? todayMovers() : pastMovers(date)]);
+  const useScreener = today || (date === lastTradingDay() && !marketOpen() && (!isTradingDay(todayEt()) || etHm() < "09:30"));
+  const [hs, mv] = await Promise.all([haltsOn(date), useScreener ? todayMovers() : pastMovers(date)]);
   if (hs == null) notes.push("나스닥 거래정지 목록을 가져오지 못했어요.");
-  if (mv == null) notes.push(today ? "오늘 급등주 목록(나스닥 종목표)을 가져오지 못했어요." : polygonReady() ? "지난 날짜 급등주(Polygon)를 가져오지 못했어요." : "지난 날짜의 급등주 전체 목록은 Polygon 무료 키(POLYGON_API_KEY)를 넣으면 나와요. 지금은 거래정지 종목만 보여요.");
+  if (mv == null) notes.push(useScreener ? "오늘 급등주 목록(나스닥 종목표)을 가져오지 못했어요." : polygonReady() ? "지난 날짜 급등주(Polygon)를 가져오지 못했어요." : "지난 날짜의 급등주 전체 목록은 Polygon 무료 키(POLYGON_API_KEY)를 넣으면 나와요. 지금은 거래정지 종목만 보여요.");
 
   // 종목별로 정지 묶기
   const byT = new Map<string, HaltItem[]>();

@@ -26,13 +26,19 @@ export function marketOpen(now = Date.now()) {
   const hm = etHm(now);
   return isTradingDay(etDate(now)) && hm >= "09:30" && hm < "16:00";
 }
-/** "10:32:15" (ET, 그 날짜) → 실제 시각 ISO */
-export function etToIso(date: string, hms: string) {
+/** "10:32:15" · "9:32" · "10:32:15 AM" (ET, 그 날짜) → 실제 시각 ISO. 읽을 수 없으면 null */
+export function etToIso(date: string, hms: string): string | null {
+  const m = hms.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AP]M)?$/i);
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  let h = +m[1];
+  if (m[4]) h = (h % 12) + (/p/i.test(m[4]) ? 12 : 0);
+  const t = `${String(h).padStart(2, "0")}:${m[2]}:${m[3] ?? "00"}`;
   for (const off of ["-04:00", "-05:00"]) {
-    const iso = `${date}T${hms.padStart(8, "0")}${off}`, t = new Date(iso);
-    if (etDate(t) === date && etHm(t) === hms.slice(0, 5).padStart(5, "0")) return t.toISOString();
+    const d = new Date(`${date}T${t}${off}`);
+    if (!isNaN(d.getTime()) && etDate(d) === date && etHm(d) === t.slice(0, 5)) return d.toISOString();
   }
-  return new Date(`${date}T${hms}-05:00`).toISOString();
+  const d = new Date(`${date}T${t}-05:00`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 export const usd = (x: number) => (x >= 100 ? x.toFixed(2) : x >= 1 ? x.toFixed(2) : x.toFixed(4)).replace(/\.?0+$/, m => (m.startsWith(".") && m.length > 3 ? m : m));
 export function money(x: number) {

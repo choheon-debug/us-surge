@@ -44,10 +44,12 @@ export async function haltsOn(date: string): Promise<HaltItem[] | null> {
     const code = tag(item, "ReasonCode").toUpperCase();
     const info = HALT_CODES[code] ?? { label: code || "기타 정지", plain: "거래소가 거래를 멈춤", kind: "other" as const };
     const rd = toYmd(tag(item, "ResumptionDate")), rt = tag(item, "ResumptionTradeTime");
+    const halt = etToIso(hd, tag(item, "HaltTime") || "00:00:00");
+    if (!halt) continue;   // 시각을 읽을 수 없는 줄은 건너뛴다
     out.push({
       ticker: tag(item, "IssueSymbol").toUpperCase(), name: tag(item, "IssueName"), market: tag(item, "Market"),
       code, label: info.label, plain: info.plain, kind: info.kind,
-      halt: etToIso(hd, tag(item, "HaltTime") || "00:00:00"), resume: rd && rt ? etToIso(rd, rt) : null,
+      halt, resume: rd && rt ? etToIso(rd, rt) : null,
     });
   }
   return out.sort((a, b) => a.halt.localeCompare(b.halt));

@@ -1,6 +1,6 @@
 // GET /api/day?d=2026-10-30 → 그날 거래정지 종목·급등주
 import { day } from "@/lib/data";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const d = new URL(req.url).searchParams.get("d") ?? "";

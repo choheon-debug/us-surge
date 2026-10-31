@@ -36,7 +36,9 @@ export default function App() {
   const loadDay = useCallback((quiet = false) => {
     if (!quiet) { setLoading(true); setErr(""); setDay(null); }
     fetch(`/api/day?d=${date}`).then(async r => {
-      const j: Day = await r.json();
+      const txt = await r.text();
+      let j: Day;
+      try { j = JSON.parse(txt); } catch { throw new Error(r.status === 504 ? "서버 응답이 너무 늦어요 (시간 초과). 잠시 뒤 다시 눌러 주세요." : `서버 오류예요 (${r.status}). 잠시 뒤 다시 해 주세요.`); }
       if (!r.ok) throw new Error((j as unknown as { error: string }).error);
       setDay(j);
       // 📊 검증용: 지난 날짜의 결과를 이 휴대폰에 모아 둔다

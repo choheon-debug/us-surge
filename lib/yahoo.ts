@@ -9,7 +9,7 @@ type Chart = { chart?: { result?: Array<{
 }> } };
 
 async function chart(ticker: string, q: string, revalidate?: number) {
-  const j = await getJson<Chart>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?${q}`, { revalidate });
+  const j = await getJson<Chart>(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?${q}`, { revalidate, timeout: 7000 });
   const r = j?.chart?.result?.[0];
   if (!r) return null;
   const k = r.indicators?.quote?.[0] ?? {};

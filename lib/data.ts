@@ -37,8 +37,8 @@ export async function day(date: string): Promise<Day> {
   const gainRows = [...movers.values()].slice(0, 60).map(m => mkRow(m.ticker, m));
 
   // 가격·등락률·그 뒤 결과는 Yahoo 일봉으로 채운다 (정지 종목은 가격이 없을 수 있다)
-  const need = [...new Map([...haltRows, ...gainRows].map(r => [r.ticker, r])).values()].slice(0, 90);
-  const stats = new Map((await pool(need, 8, async r => [r.ticker, await dayStats(r.ticker, date).catch(() => null)] as const)));
+  const need = [...new Map([...haltRows, ...gainRows].map(r => [r.ticker, r])).values()].slice(0, 70);
+  const stats = new Map((await pool(need, 14, async r => [r.ticker, await dayStats(r.ticker, date).catch(() => null)] as const)));
   for (const r of [...haltRows, ...gainRows]) {
     const s = stats.get(r.ticker);
     if (!s) continue;

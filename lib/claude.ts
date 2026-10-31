@@ -15,6 +15,10 @@ function korean(err: unknown): Error {
   if (err instanceof Anthropic.AuthenticationError) return new ClaudeError("Anthropic API 키가 맞지 않아요. Vercel의 ANTHROPIC_API_KEY를 확인해 주세요.");
   if (err instanceof Anthropic.RateLimitError) return new ClaudeError("요청이 많아 잠시 막혔어요. 1분 뒤 다시 해 주세요.");
   if (err instanceof Anthropic.BadRequestError && /credit|balance/i.test(err.message)) return new ClaudeError("Anthropic 크레딧이 부족해요.");
+  if (err instanceof Anthropic.APIError && /usage limits/i.test(String(err.message))) {
+    const d = String(err.message).match(/regain access on (\d{4}-\d{2}-\d{2})/)?.[1];
+    return new ClaudeError(`Anthropic 월 사용 한도에 닿았어요.${d ? ` ${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일에 다시 쓸 수 있어요.` : ""} 바로 쓰려면 Anthropic Console → Limits에서 한도를 올려 주세요.`);
+  }
   if (err instanceof Anthropic.PermissionDeniedError) return new ClaudeError("이 API 키로는 웹 검색을 쓸 수 없어요. Anthropic Console 설정에서 웹 검색을 켜 주세요.");
   if (err instanceof Anthropic.NotFoundError) return new ClaudeError(`AI 모델(${MODEL})을 찾지 못했어요.`);
   // 원인을 알 수 있게 상태 번호와 짧은 내용을 함께 보여 준다

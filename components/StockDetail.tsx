@@ -45,7 +45,6 @@ export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk
       }
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
-  useEffect(() => { analyze(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const c = a?.analysis.company, up = (r.rate ?? 0) >= 0, wait = busy ? "분석 중…" : "–";
   return (
@@ -80,6 +79,8 @@ export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk
 
       <section className="card mb-3">
         <div className="mb-1 flex items-center justify-between"><b>🔎 급등·정지 이유</b>{a && <span className={`tag ${KIND[a.analysis.kind]}`}>{a.analysis.kind}</span>}</div>
+        {!a && !busy && <><p className="text-sm muted">AI가 보도자료·SEC 공시·뉴스를 검색해서 왜 올랐는지(멈췄는지), 위험 요소를 정리해요. 약 1분 · 크레딧 조금.</p>
+          <button className="btn btn-fill mt-2 w-full" onClick={() => analyze()}>🔎 이유 분석하기</button></>}
         {busy && <p className="flex items-center gap-2 text-sm font-bold"><span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--acc2)] border-t-[var(--acc)]" />{status || "뉴스·공시 확인 중…"}</p>}
         {err && <p className="text-sm text-[var(--red)]">{err}</p>}
         {a && <>

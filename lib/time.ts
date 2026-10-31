@@ -28,7 +28,7 @@ export function marketOpen(now = Date.now()) {
 }
 /** "10:32:15" · "9:32" · "10:32:15 AM" (ET, 그 날짜) → 실제 시각 ISO. 읽을 수 없으면 null */
 export function etToIso(date: string, hms: string): string | null {
-  const m = hms.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AP]M)?$/i);
+  const m = hms.replace(/\s*\.\d+\s*$/, "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AP]M)?$/i);
   if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
   let h = +m[1];
   if (m[4]) h = (h % 12) + (/p/i.test(m[4]) ? 12 : 0);

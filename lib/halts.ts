@@ -1,6 +1,6 @@
 // 나스닥 거래정지 목록 (Nasdaq Trader RSS, 키 없음): 그날 정지된 모든 미국 상장 종목·사유 코드·정지/재개 시각(ET)
 import { getText } from "./http";
-import { etToIso, todayEt } from "./time";
+import { etToIso, lastTradingDay, todayEt } from "./time";
 import type { HaltEvent } from "./types";
 
 /** 정지 코드 → 쉬운 말 */
@@ -24,6 +24,8 @@ export const HALT_CODES: Record<string, { label: string; plain: string; kind: Ha
   O1: { label: "운영상 정지", plain: "거래소 운영 문제로 멈춤", kind: "other" },
 };
 
+const MKT: Record<string, string> = { Q: "NASDAQ", N: "NYSE", A: "NYSE American", P: "NYSE Arca", Z: "Cboe BZX" };
+
 export type HaltItem = { ticker: string; name: string; market: string } & HaltEvent;
 
 const tag = (item: string, name: string) =>
@@ -34,9 +36,13 @@ const toYmd = (mdy: string) => { const [m, d, y] = mdy.split("/"); return y && m
 export async function haltsOn(date: string): Promise<HaltItem[] | null> {
   const today = date === todayEt();
   const [y, m, d] = date.split("-");
-  const url = `https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts${today ? "" : `&haltdate=${m}${d}${y}`}`;
-  const xml = await getText(url, { revalidate: today ? 60 : 7 * 86400, timeout: 12_000 });
-  if (xml == null) return null;
+  const base = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts";
+  // 주말·새벽에는 "오늘" 목록에 마지막 거래일 정지가 들어 있으니 그 날짜는 두 목록을 합친다 (지난 날짜 목록은 늦게 채워질 수 있음)
+  const urls = today ? [base] : date === lastTradingDay() ? [`${base}&haltdate=${m}${d}${y}`, base] : [`${base}&haltdate=${m}${d}${y}`];
+  const xmls = await Promise.all(urls.map(u => getText(u, { revalidate: today || u === base ? 60 : 7 * 86400, timeout: 12_000 })));
+  if (xmls.every(x => x == null)) return null;
+  const xml = xmls.filter(Boolean).join("");
+  const seen = new Set<string>();
   const out: HaltItem[] = [];
   for (const item of xml.split(/<item>/i).slice(1)) {
     const hd = toYmd(tag(item, "HaltDate"));
@@ -46,8 +52,11 @@ export async function haltsOn(date: string): Promise<HaltItem[] | null> {
     const rd = toYmd(tag(item, "ResumptionDate")), rt = tag(item, "ResumptionTradeTime");
     const halt = etToIso(hd, tag(item, "HaltTime") || "00:00:00");
     if (!halt) continue;   // 시각을 읽을 수 없는 줄은 건너뛴다
+    const sym = tag(item, "IssueSymbol").toUpperCase();
+    if (seen.has(sym + halt)) continue;
+    seen.add(sym + halt);
     out.push({
-      ticker: tag(item, "IssueSymbol").toUpperCase(), name: tag(item, "IssueName"), market: tag(item, "Market"),
+      ticker: tag(item, "IssueSymbol").toUpperCase(), name: tag(item, "IssueName"), market: tag(item, "Market") || MKT[tag(item, "Mkt")] || tag(item, "Mkt"),
       code, label: info.label, plain: info.plain, kind: info.kind,
       halt, resume: rd && rt ? etToIso(rd, rt) : null,
     });

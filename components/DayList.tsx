@@ -1,7 +1,7 @@
 "use client";
 // 그날 목록: ⏸ 거래정지(기본) / ▲ +20% 이상 / 거래대금. 지난 날짜는 "그 뒤" 결과까지
 import { useState } from "react";
-import { etHm, isTradingDay, kstHm, money, prettyDate, signed, todayEt } from "@/lib/time";
+import { etHm, isTradingDay, kstHm, money, prettyDate, signed, todayEt, volText } from "@/lib/time";
 import type { Day, HaltEvent, Row } from "@/lib/types";
 
 type Props = { date: string; day: Day | null; loading: boolean; err: string; onOpen: (r: Row) => void };
@@ -83,7 +83,7 @@ export function RowCard({ n, r, onOpen }: { n: number; r: Row; onOpen: () => voi
       <HaltBox halts={r.halts} haltedNow={r.haltedNow} />
       {(r.dollarVol != null || r.volRatio != null) && <div className="mt-2 grid grid-cols-2 gap-1.5 text-center">
         <div className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.68rem] muted">거래대금</div><b className="num text-sm">{r.dollarVol != null ? money(r.dollarVol) : "–"}</b></div>
-        <div className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.68rem] muted">거래량 증가</div><b className="num text-sm up">{r.volRatio != null ? `+${r.volRatio.toLocaleString()}%` : "–"}</b></div>
+        <div className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.68rem] muted">거래량 증가</div><b className="num text-sm up">{r.volRatio != null ? volText(r.volRatio) : "–"}</b></div>
       </div>}
       <div className="mt-2 flex justify-end text-sm font-bold text-[var(--acc)]">차트 · 이유 분석 ›</div>
       {r.after && <div className="mt-1 flex justify-between border-t border-[var(--line)] pt-1.5 text-sm">

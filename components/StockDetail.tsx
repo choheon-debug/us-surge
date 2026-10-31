@@ -1,7 +1,7 @@
 "use client";
 // 종목 분석: 헤더(자세히) · 📈 차트 · ⏸ 정지 기록 · 🔎 급등·정지 이유(AI) · 뉴스 · ⚠️ 리스크
 import { useEffect, useState } from "react";
-import { etHm, kstHm, money, prettyDate, signed } from "@/lib/time";
+import { etHm, kstHm, money, prettyDate, signed, volText } from "@/lib/time";
 import type { Analysis } from "@/lib/claude";
 import type { Row } from "@/lib/types";
 import Chart from "./Chart";
@@ -47,7 +47,7 @@ export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk
   };
   useEffect(() => { analyze(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const c = a?.analysis.company, up = (r.rate ?? 0) >= 0;
+  const c = a?.analysis.company, up = (r.rate ?? 0) >= 0, wait = busy ? "분석 중…" : "–";
   return (
     <div>
       <button onClick={onBack} className="mb-2 text-sm font-bold muted">‹ {prettyDate(date)}</button>
@@ -59,9 +59,9 @@ export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk
         </div>
         <div className="mt-2 text-sm">
           {[
-            ["시가총액", c?.marketCap || "분석 중…"], ["유통주식", c?.float || "분석 중…"],
-            ["거래대금", `${r.dollarVol != null ? money(r.dollarVol) : "–"}${r.volRatio != null ? ` · 거래량 +${r.volRatio.toLocaleString()}%` : ""}`],
-            ["업종 · 국가", c ? `${c.sector} · ${c.country}` : "분석 중…"],
+            ["시가총액", c?.marketCap || wait], ["유통주식", c?.float || wait],
+            ["거래대금", `${r.dollarVol != null ? money(r.dollarVol) : "–"}${r.volRatio != null ? ` · 거래량 ${volText(r.volRatio)}` : ""}`],
+            ["업종 · 국가", c ? `${c.sector} · ${c.country}` : wait],
             ["그 뒤", r.after ? `다음 날 ${r.after.next == null ? "–" : signed(r.after.next)} · 지금 ${r.after.now == null ? "–" : signed(r.after.now)}` : "–"],
           ].map(([k, v]) => <div key={k} className="flex justify-between gap-3 border-t border-[var(--line)] py-1.5 first:border-0"><span className="shrink-0 muted">{k}</span><b className="text-right">{v}</b></div>)}
         </div>

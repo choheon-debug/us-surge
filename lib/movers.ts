@@ -6,17 +6,21 @@ export type Mover = { ticker: string; name: string; price: number; rate: number;
 const MIN_RATE = 20, MIN_DOLLAR = 1_000_000;
 
 /** 오늘: 나스닥 종목표 (모든 상장 종목의 지금 값·등락률). 2분 저장 */
+let moversCache: { at: number; v: Mover[] } | null = null;
 export async function todayMovers(): Promise<Mover[] | null> {
+  if (moversCache && Date.now() - moversCache.at < 120_000) return moversCache.v;
   type R = { data?: { rows?: { symbol: string; name: string; lastsale: string; pctchange: string; volume: string; marketCap: string }[] } };
   const j = await getJson<R>("https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=25000&download=true",
-    { headers: { Accept: "application/json, text/plain, */*", Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" }, revalidate: 120, timeout: 15_000 });
+    { headers: { Accept: "application/json, text/plain, */*", Origin: "https://www.nasdaq.com", Referer: "https://www.nasdaq.com/" }, timeout: 15_000 });
   const rows = j?.data?.rows;
   if (!rows) return null;
   const num = (s: string) => Number(String(s).replace(/[$,%]/g, ""));
-  return rows.map(r => {
+  const v = rows.map(r => {
     const price = num(r.lastsale), volume = num(r.volume);
     return { ticker: r.symbol.trim().toUpperCase(), name: r.name, price, rate: num(r.pctchange), volume, dollarVol: price * volume, marketCap: num(r.marketCap) || null, volRatio: null };
   }).filter(m => m.rate >= MIN_RATE && m.dollarVol >= MIN_DOLLAR && Number.isFinite(m.price)).sort((a, b) => b.rate - a.rate);
+  moversCache = { at: Date.now(), v };
+  return v;
 }
 
 type G = { results?: { T: string; c: number; v: number; o: number }[] };

@@ -88,9 +88,35 @@ function CalTab({ trades, closed, fx, onEdit, onOpenTicker }: Props & { closed: 
     <section className="card">
       <div className="flex items-baseline justify-between"><b>{prettyDate(date)}</b><span className="text-xs muted">{list.length}건{dp ? <> · 실현 <b className={pnlCls(dp)}>{usd(dp, true)}</b></> : ""}</span></div>
       {!list.length && <p className="mt-1 text-sm muted">이 날은 매매 기록이 없어요.</p>}
-      {list.map(t => <TradeRow key={t.id} t={t} c={cByTrade.get(t.id)} fx={fx} onEdit={() => onEdit(t)} onOpen={() => onOpenTicker(t.ticker, t.date)} />)}
+      {[...new Set(list.map(t => t.ticker))].map(tk => <TickerGroup key={tk} ticker={tk} list={list.filter(t => t.ticker === tk)} cmap={cByTrade} fx={fx} onEdit={onEdit} onOpen={() => onOpenTicker(tk, date)} />)}
     </section>
   </>;
+}
+
+/** 같은 종목은 한 카드로: 위에 종목·그날 손익, 아래에 매수·매도 줄 */
+function TickerGroup({ ticker, list, cmap, fx, onEdit, onOpen }: { ticker: string; list: Trade[]; cmap: Map<string, Closed>; fx: number; onEdit: (t: Trade) => void; onOpen: () => void }) {
+  const pnl = list.reduce((a, t) => a + (cmap.get(t.id)?.pnl ?? 0), 0), hasSell = list.some(t => t.side === "sell");
+  const tags = [...new Set(list.flatMap(t => [t.strategy, t.mood]).filter(Boolean))] as string[];
+  const memo = list.map(t => t.memo).filter(Boolean).join(" · ");
+  return (
+    <div className="border-t border-[var(--line)] py-2.5 first-of-type:border-0">
+      <div className="flex items-center gap-2.5">
+        <button onClick={onOpen} className="grid h-10 w-12 shrink-0 place-items-center rounded-xl bg-[#6366f1] text-[0.72rem] font-extrabold text-white">{ticker.slice(0, 5)}</button>
+        <div className="min-w-0 flex-1"><b>{ticker}</b> <span className="text-xs muted">{list.length}건</span>
+          <div className="flex flex-wrap gap-1">{tags.map(x => <span key={x} className={`tag ${/[😌😨😤🤑]/u.test(x) ? "tag-a" : "tag-g"}`}>{x}</span>)}{list.some(t => t.photo) && <span className="text-xs">📷</span>}</div></div>
+        {hasSell && <div className="shrink-0 text-right"><b className={`num ${pnlCls(pnl)}`}>{usd(pnl, true)}</b>{fx > 0 && <div className="text-[0.65rem] muted">{krwToo(pnl, fx, true).replace(/[()]/g, "").trim()}</div>}</div>}
+      </div>
+      <div className="mt-1.5 space-y-1">
+        {list.map(t => { const c = cmap.get(t.id);
+          return <button key={t.id} onClick={() => onEdit(t)} className="flex w-full items-center gap-1.5 rounded-lg bg-[#f6f7f9] px-2 py-1 text-left text-xs">
+            <span className={`tag ${t.side === "buy" ? "tag-r" : "tag-n"}`}>{t.side === "buy" ? "매수" : "매도"}</span>
+            <span className="min-w-0 flex-1 truncate num">{t.time ? <span className="muted">{t.time} </span> : null}<b>{px(t.price)}</b> × {t.qty.toLocaleString()}주</span>
+            {c && <b className={`shrink-0 ${pnlCls(c.pnl)}`}>{signed(c.pct)}</b>}
+          </button>; })}
+        {memo && <p className="text-xs muted">📝 {memo}</p>}
+      </div>
+    </div>
+  );
 }
 
 export function TradeRow({ t, c, fx, onEdit, onOpen }: { t: Trade; c?: Closed; fx: number; onEdit: () => void; onOpen?: () => void }) {

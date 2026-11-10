@@ -38,6 +38,17 @@ export default function TradeForm({ init, settings, fx, held, onSave, onDelete, 
   const [err, setErr] = useState("");
   const file = useRef<HTMLInputElement>(null);
 
+  // 매수·매도는 서로 다른 기록: 버튼을 바꾸면 가격·수량·시각 등은 그쪽 칸으로 따로 보관한다 (종목·날짜·환율만 같이 씀)
+  type Draft = { time: string; price: string; qty: string; fee: string; strategy: string; mood: string; stop: string; target: string; memo: string; photo: string };
+  const drafts = useRef<Partial<Record<Side, Draft>>>({});
+  const switchSide = (to: Side) => {
+    if (to === side) return;
+    drafts.current[side] = { time, price, qty, fee, strategy, mood, stop, target, memo, photo };
+    const d = drafts.current[to] ?? { time: "", price: "", qty: to === "sell" && held(ticker.trim().toUpperCase()) ? String(held(ticker.trim().toUpperCase())) : "", fee: "", strategy: "", mood: "", stop: "", target: "", memo: "", photo: "" };
+    setTime(d.time); setPrice(d.price); setQty(d.qty); setFee(d.fee); setStrategy(d.strategy); setMood(d.mood); setStop(d.stop); setTarget(d.target); setMemo(d.memo); setPhoto(d.photo);
+    setSide(to); setErr("");
+  };
+
   const t = ticker.trim().toUpperCase(), p = n(price), q = n(qty), amount = p * q;
   const autoFee = Math.round(amount * settings.feeRate) / 100, f = fee === "" ? autoFee : n(fee), r = n(rate);
   const total = side === "buy" ? amount + f : amount - f, have = t ? held(t) + (editing && init.side === "sell" && init.ticker === t ? init.qty ?? 0 : 0) : 0;
@@ -66,7 +77,7 @@ export default function TradeForm({ init, settings, fx, held, onSave, onDelete, 
       <section className="card mb-3 space-y-3">
         <div className="flex items-baseline justify-between"><b className="text-lg">{editing ? "✏️ 매매 고치기" : "＋ 매매 기록"}</b><span className="text-xs muted">미국 동부시간 기준</span></div>
         <div className="grid grid-cols-2 gap-2">
-          {(["buy", "sell"] as const).map(s => <button key={s} onClick={() => setSide(s)} className={`rounded-xl py-2.5 font-extrabold ${side === s ? (s === "buy" ? "bg-[var(--up)] text-white" : "bg-[var(--dn)] text-white") : "bg-[#f1f2f4] muted"}`}>{s === "buy" ? "매수" : "매도"}</button>)}
+          {(["buy", "sell"] as const).map(s => <button key={s} onClick={() => switchSide(s)} className={`rounded-xl py-2.5 font-extrabold ${side === s ? (s === "buy" ? "bg-[var(--up)] text-white" : "bg-[var(--dn)] text-white") : "bg-[#f1f2f4] muted"}`}>{s === "buy" ? "매수" : "매도"}</button>)}
         </div>
         <label className="block"><span className="mb-1 block text-sm font-bold">종목 (티커)</span>
           <input className="inp !py-2.5 text-[1.05rem] font-bold uppercase" value={ticker} onChange={e => setTicker(e.target.value)} placeholder="예: KNRX" autoCapitalize="characters" />
@@ -99,6 +110,7 @@ export default function TradeForm({ init, settings, fx, held, onSave, onDelete, 
           <input ref={file} type="file" accept="image/*" hidden onChange={e => { const fl = e.target.files?.[0]; e.target.value = ""; if (fl) pickPhoto(fl); }} />
         </div>
         {err && <p className="text-sm text-[var(--red)]">{err}</p>}
+        <p className="text-xs muted">한 번에 한 건씩 기록해요. 산 것을 먼저 저장하고, 팔 때 다시 <b>＋ 매매 기록하기 → 매도</b>로 따로 기록하세요.</p>
         <button className="btn btn-fill w-full" onClick={save}>저장</button>
         {editing && onDelete && <button className="btn btn-gray w-full" onClick={() => { if (confirm("이 기록을 지울까요?")) onDelete(init.id!); }}>🗑️ 지우기</button>}
       </section>

@@ -14,9 +14,9 @@ export const DEFAULT_SETTINGS: JSettings = { feeRate: 0.25, fx: 0, fxAuto: true,
 export const MOODS = ["😌 차분", "😨 조급", "😤 복수", "🤑 욕심"];
 
 /** 매도 한 건의 결과 */
-export type Closed = { trade: Trade; cost: number; pnl: number; pct: number; strategy?: string; mood?: string; stop?: number | null; held: number };
+export type Closed = { trade: Trade; cost: number; pnl: number; pct: number; strategy?: string; mood?: string; stop?: number | null; held: number; cycle: string };
 /** 보유 중인 종목 */
-export type Position = { ticker: string; qty: number; avg: number; cost: number; since: string; stop?: number | null; target?: number | null; strategy?: string; trades: Trade[] };
+export type Position = { cycle: string; ticker: string; qty: number; avg: number; cost: number; since: string; stop?: number | null; target?: number | null; strategy?: string; trades: Trade[] };
 
 // 같은 날은 둘 다 시각이 있으면 시각 순, 아니면 기록한 순서 (시각을 안 넣은 매도가 매수보다 앞서지 않게)
 const order = (a: Trade, b: Trade) => a.date.localeCompare(b.date) || (a.time && b.time ? a.time.localeCompare(b.time) : 0) || a.at - b.at;
@@ -28,7 +28,7 @@ export function compute(trades: Trade[]) {
   for (const t of [...trades].sort(order)) {
     let p = pos.get(t.ticker);
     if (t.side === "buy") {
-      if (!p) { p = { ticker: t.ticker, qty: 0, avg: 0, cost: 0, since: t.date, strategy: t.strategy, trades: [] }; pos.set(t.ticker, p); }
+      if (!p) { p = { cycle: t.id, ticker: t.ticker, qty: 0, avg: 0, cost: 0, since: t.date, strategy: t.strategy, trades: [] }; pos.set(t.ticker, p); }
       p.cost += t.price * t.qty + t.fee; p.qty += t.qty; p.avg = p.cost / p.qty;
       if (t.stop != null) p.stop = t.stop;
       if (t.target != null) p.target = t.target;
@@ -37,7 +37,7 @@ export function compute(trades: Trade[]) {
       const q = Math.min(t.qty, p?.qty ?? 0);
       const opening = p?.trades.find(x => x.side === "buy");
       const cost = (p?.avg ?? 0) * q, pnl = t.price * t.qty - t.fee - cost;
-      closed.push({ trade: t, cost, pnl: q ? pnl : 0, pct: cost ? (pnl / cost) * 100 : 0, strategy: opening?.strategy ?? t.strategy, mood: opening?.mood ?? t.mood, stop: p?.stop ?? null, held: p ? days(p.since, t.date) : 0 });
+      closed.push({ trade: t, cost, pnl: q ? pnl : 0, pct: cost ? (pnl / cost) * 100 : 0, strategy: opening?.strategy ?? t.strategy, mood: opening?.mood ?? t.mood, stop: p?.stop ?? null, held: p ? days(p.since, t.date) : 0, cycle: p?.cycle ?? t.id });
       if (p) {
         p.trades.push(t); p.qty -= q; p.cost = p.avg * p.qty;
         if (p.qty <= 1e-9) pos.delete(t.ticker);
@@ -45,6 +45,20 @@ export function compute(trades: Trade[]) {
     }
   }
   return { closed, positions: [...pos.values()].sort((a, b) => b.cost - a.cost) };
+}
+
+/**
+ * 매매 1건 = 한 번 사서(나눠 사도) 다 팔 때까지. 나눠 판 매도들을 하나로 합친다.
+ * 아직 다 안 판 매매도 판 부분까지의 손익으로 들어간다. 날짜는 마지막 매도일.
+ */
+export function rounds(closed: Closed[]): Closed[] {
+  const m = new Map<string, Closed>();
+  for (const c of closed) {
+    const r = m.get(c.cycle);
+    if (!r) { m.set(c.cycle, { ...c }); continue; }
+    r.pnl += c.pnl; r.cost += c.cost; r.pct = r.cost ? (r.pnl / r.cost) * 100 : 0; r.trade = c.trade; r.held = c.held;
+  }
+  return [...m.values()];
 }
 
 export function stats(closed: Closed[]) {

@@ -2,7 +2,7 @@
 // 📒 매매일지: 달력(실현 손익) · 보유(+관심) · 통계(전략·마음별) · 복기(주간) · ⚙ 설정·백업
 import { useEffect, useRef, useState } from "react";
 import { isHoliday, prettyDate, signed, todayEt } from "@/lib/time";
-import { addDays, compute, groupBy, krwToo, px, stats, stopCheck, usd, weekStart, type Closed, type JSettings, type Position, type Review, type Trade } from "@/lib/journal";
+import { addDays, compute, groupBy, rounds, krwToo, px, stats, stopCheck, usd, weekStart, type Closed, type JSettings, type Position, type Review, type Trade } from "@/lib/journal";
 import type { WatchItem } from "./App";
 
 export type Live = Record<string, { price: number | null; prev: number | null; name: string; halts: number; haltedNow: boolean; haltLabel: string | null }>;
@@ -51,7 +51,7 @@ function CalTab({ trades, closed, fx, onEdit, onOpenTicker }: Props & { closed: 
   const [date, setDate] = useState(todayEt());
   const [y, m] = month.split("-").map(Number);
   const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const mc = closed.filter(c => c.trade.date.startsWith(month)), s = stats(mc);
+  const mc = closed.filter(c => c.trade.date.startsWith(month)), s = stats(rounds(mc));
   const dayPnl = new Map<string, number>(), dayBuy = new Set(trades.filter(t => t.side === "buy").map(t => t.date));
   for (const c of mc) dayPnl.set(c.trade.date, (dayPnl.get(c.trade.date) ?? 0) + c.pnl);
   const move = (d: number) => setMonth(new Date(Date.UTC(y, m - 1 + d, 1)).toISOString().slice(0, 7));
@@ -68,7 +68,7 @@ function CalTab({ trades, closed, fx, onEdit, onOpenTicker }: Props & { closed: 
       </div>
       <div className={`mt-1 text-center text-[1.7rem] font-extrabold num ${pnlCls(s.pnl)}`}>{usd(s.pnl, true)}<span className="text-base">{krwToo(s.pnl, fx, true)}</span></div>
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
-        {[["매도", `${s.n}회`], ["승률", s.n ? `${Math.round(s.winRate * 100)}%` : "–"], ["손익비", s.ratio != null ? s.ratio.toFixed(1) : "–"]].map(([k, v]) =>
+        {[["매매", `${s.n}건`], ["승률", s.n ? `${Math.round(s.winRate * 100)}%` : "–"], ["손익비", s.ratio != null ? s.ratio.toFixed(1) : "–"]].map(([k, v]) =>
           <div key={k} className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.7rem] muted">{k}</div><b className="num">{v}</b></div>)}
       </div>
       <div className="mt-3 grid grid-cols-7 gap-1 text-center">
@@ -86,7 +86,7 @@ function CalTab({ trades, closed, fx, onEdit, onOpenTicker }: Props & { closed: 
       <p className="mt-2 text-xs muted">빨강 = 이익 · 파랑 = 손실 · 날짜를 누르면 그날 매매 (미국 동부시간 날짜)</p>
     </section>
     <section className="card">
-      <div className="flex items-baseline justify-between"><b>{prettyDate(date)}</b><span className="text-xs muted">{list.length}건{dp ? <> · 실현 <b className={pnlCls(dp)}>{usd(dp, true)}</b></> : ""}</span></div>
+      <div className="flex items-baseline justify-between"><b>{prettyDate(date)}</b><span className="text-xs muted">{new Set(list.map(t => t.ticker)).size}종목{dp ? <> · 실현 <b className={pnlCls(dp)}>{usd(dp, true)}</b></> : ""}</span></div>
       {!list.length && <p className="mt-1 text-sm muted">이 날은 매매 기록이 없어요.</p>}
       {[...new Set(list.map(t => t.ticker))].map(tk => <TickerGroup key={tk} ticker={tk} list={list.filter(t => t.ticker === tk)} cmap={cByTrade} fx={fx} onEdit={onEdit} onOpen={() => onOpenTicker(tk, date)} />)}
     </section>
@@ -102,7 +102,7 @@ function TickerGroup({ ticker, list, cmap, fx, onEdit, onOpen }: { ticker: strin
     <div className="border-t border-[var(--line)] py-2.5 first-of-type:border-0">
       <div className="flex items-center gap-2.5">
         <button onClick={onOpen} className="grid h-10 w-12 shrink-0 place-items-center rounded-xl bg-[#6366f1] text-[0.72rem] font-extrabold text-white">{ticker.slice(0, 5)}</button>
-        <div className="min-w-0 flex-1"><b>{ticker}</b> <span className="text-xs muted">{list.length}건</span>
+        <div className="min-w-0 flex-1"><b>{ticker}</b> <span className="text-xs muted">{(() => { const b = list.filter(t => t.side === "buy").length, sl = list.length - b; return [b && `매수 ${b}`, sl && `매도 ${sl}`].filter(Boolean).join(" · "); })()}</span>
           <div className="flex flex-wrap gap-1">{tags.map(x => <span key={x} className={`tag ${/[😌😨😤🤑]/u.test(x) ? "tag-a" : "tag-g"}`}>{x}</span>)}{list.some(t => t.photo) && <span className="text-xs">📷</span>}</div></div>
         {hasSell && <div className="shrink-0 text-right"><b className={`num ${pnlCls(pnl)}`}>{usd(pnl, true)}</b>{fx > 0 && <div className="text-[0.65rem] muted">{krwToo(pnl, fx, true).replace(/[()]/g, "").trim()}</div>}</div>}
       </div>
@@ -183,7 +183,7 @@ function HoldTab({ positions, live, fx, onOpenTicker, onNew, watch, onRemoveWatc
 function StatTab({ closed, fx }: { closed: Closed[]; fx: number }) {
   const [range, setRange] = useState<"m" | "q" | "y" | "all">("y");
   const t = todayEt(), from = range === "m" ? `${t.slice(0, 7)}-01` : range === "q" ? addDays(t, -91) : range === "y" ? `${t.slice(0, 4)}-01-01` : "";
-  const list = closed.filter(c => c.trade.date >= from), s = stats(list), sc = stopCheck(list);
+  const list = rounds(closed.filter(c => c.trade.date >= from)), s = stats(list), sc = stopCheck(list);
   const byS = groupBy(list, c => c.strategy), byM = groupBy(list, c => c.mood);
   const worst = [...byS, ...byM].filter(g => g.n >= 3 && g.pnl < 0).sort((a, b) => a.pnl - b.pnl)[0];
   const best = byS.filter(g => g.n >= 3 && g.pnl > 0).sort((a, b) => b.pnl - a.pnl)[0];
@@ -202,7 +202,7 @@ function StatTab({ closed, fx }: { closed: Closed[]; fx: number }) {
         {[["승률", s.n ? `${Math.round(s.winRate * 100)}%` : "–", ""], ["평균 이익", s.avgWin ? signed(s.avgWin) : "–", "up"], ["평균 손실", s.avgLoss ? signed(s.avgLoss) : "–", "dn"]].map(([k, v, c]) =>
           <div key={k} className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.7rem] muted">{k}</div><b className={`num ${c}`}>{v}</b></div>)}
       </div>
-      {!s.n && <p className="mt-2 text-sm muted">이 기간에 매도한 기록이 없어요. 판 매매만 통계에 들어가요.</p>}
+      {!s.n && <p className="mt-2 text-sm muted">이 기간에 판 기록이 없어요. 사서 팔기까지가 매매 1건이에요 (나눠 사고 나눠 팔아도 1건).</p>}
       <Table title="전략별" rows={byS} />
       <Table title="마음 상태별" rows={byM} />
     </section>
@@ -218,11 +218,11 @@ function StatTab({ closed, fx }: { closed: Closed[]; fx: number }) {
 function RevTab({ reviews, setReviews, closed, trades, fx, say }: Props & { closed: Closed[] }) {
   const [week, setWeek] = useState(weekStart(todayEt()));
   const r = reviews[week] ?? { week, good: "", bad: "", rule: "" };
-  const end = addDays(week, 6), wc = closed.filter(c => c.trade.date >= week && c.trade.date <= end), s = stats(wc);
+  const end = addDays(week, 6), wc = rounds(closed.filter(c => c.trade.date >= week && c.trade.date <= end)), s = stats(wc);
   const wt = trades.filter(t => t.date >= week && t.date <= end);
   const lastRule = Object.values(reviews).filter(x => x.week < week && x.rule).sort((a, b) => b.week.localeCompare(a.week))[0];
   const set = (k: keyof Review, v: string) => setReviews(p => ({ ...p, [week]: { ...r, [k]: v } }));
-  const text = [`📒 매매 복기 ${prettyDate(week)} ~ ${prettyDate(end)}`, `매매 ${wt.length}건 · 매도 ${s.n}건 · 승률 ${s.n ? Math.round(s.winRate * 100) : 0}% · 실현 ${usd(s.pnl, true)}${krwToo(s.pnl, fx, true)}`,
+  const text = [`📒 매매 복기 ${prettyDate(week)} ~ ${prettyDate(end)}`, `매매 ${s.n}건 (주문 ${wt.length}번) · 승률 ${s.n ? Math.round(s.winRate * 100) : 0}% · 실현 ${usd(s.pnl, true)}${krwToo(s.pnl, fx, true)}`,
     ...wc.map(c => `· ${c.trade.ticker} ${usd(c.pnl, true)} (${signed(c.pct)})${c.strategy ? ` ${c.strategy}` : ""}${c.mood ? ` ${c.mood}` : ""}`),
     r.good && `👍 잘한 점: ${r.good}`, r.bad && `🤔 아쉬운 점: ${r.bad}`, r.rule && `📌 다음 주 규칙: ${r.rule}`].filter(Boolean).join("\n");
   const copy = async () => { try { await navigator.clipboard.writeText(text); say("복사했어요. 카톡에 붙여 넣으세요"); } catch { say("복사하지 못했어요"); } };
@@ -236,7 +236,7 @@ function RevTab({ reviews, setReviews, closed, trades, fx, say }: Props & { clos
         <button onClick={() => setWeek(addDays(week, 7))} className="h-8 w-8 rounded-lg bg-[#f1f2f4] font-bold" aria-label="다음 주">›</button>
       </div>
       <div className="grid grid-cols-3 gap-1.5 text-center">
-        {[["매매", `${wt.length}건`, ""], ["승률", s.n ? `${Math.round(s.winRate * 100)}%` : "–", ""], ["실현", usd(s.pnl, true), pnlCls(s.pnl)]].map(([k, v, c]) =>
+        {[["매매", `${s.n}건`, ""], ["승률", s.n ? `${Math.round(s.winRate * 100)}%` : "–", ""], ["실현", usd(s.pnl, true), pnlCls(s.pnl)]].map(([k, v, c]) =>
           <div key={k} className="rounded-xl bg-[#f4f5f7] py-1"><div className="text-[0.7rem] muted">{k}</div><b className={`num ${c}`}>{v}</b></div>)}
       </div>
       {lastRule && <p className="rounded-xl bg-[var(--acc2)] px-3 py-2 text-sm">📌 지난주에 정한 규칙: <b>{lastRule.rule}</b></p>}

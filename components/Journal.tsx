@@ -252,9 +252,19 @@ function RevTab({ reviews, setReviews, closed, trades, fx, say }: Props & { clos
 function Settings({ settings, setSettings, liveFx, backup, restore, say, onClose }: Props & { onClose: () => void }) {
   const [fee, setFee] = useState(String(settings.feeRate)), [fx, setFx] = useState(settings.fx ? String(settings.fx) : "");
   const file = useRef<HTMLInputElement>(null);
+  const makeFile = () => new File([JSON.stringify(backup())], `매매일지-백업-${todayEt().replaceAll("-", "")}.json`, { type: "application/json" });
   const saveFile = () => {
-    const blob = new Blob([JSON.stringify(backup(), null, 1)], { type: "application/json" }), url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = `매매일지-백업-${todayEt().replaceAll("-", "")}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
+    const f = makeFile(), url = URL.createObjectURL(f), a = document.createElement("a");
+    a.href = url; a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 3000);
+  };
+  // 휴대폰 공유 창을 열어 카톡(나와의 채팅 등)·메일·드라이브로 보낸다. 공유를 못 하는 브라우저는 파일로 저장
+  const shareFile = async () => {
+    const f = makeFile();
+    if (navigator.canShare?.({ files: [f] })) {
+      try { await navigator.share({ files: [f], title: "매매일지 백업" }); say("보냈어요. 카톡에서 파일을 받아 두세요"); return; }
+      catch (e) { if ((e as Error).name === "AbortError") return; }
+    }
+    saveFile(); say("이 브라우저는 바로 보내기가 안 돼서 파일로 저장했어요. 저장된 파일을 카톡으로 보내 주세요");
   };
   return (
     <section className="card space-y-3 text-sm">
@@ -268,15 +278,17 @@ function Settings({ settings, setSettings, liveFx, backup, restore, say, onClose
         {!settings.fxAuto && <input className="inp mt-1.5" inputMode="decimal" value={fx} onChange={e => setFx(e.target.value)} placeholder="예: 1390" />}
         <span className="mt-1 block text-xs muted">원화는 참고용이에요. 매매할 때의 환율은 기록마다 따로 저장돼요.</span></div>
       <button className="btn btn-fill w-full" onClick={() => { setSettings({ ...settings, feeRate: parseFloat(fee) || 0, fx: parseFloat(fx) || 0 }); say("설정을 저장했어요"); }}>저장</button>
+      <button className="btn w-full !bg-[#fee500] !text-[#3c1e1e]" onClick={shareFile}>💬 카톡으로 백업 보내기</button>
       <div className="grid grid-cols-2 gap-1.5">
-        <button className="btn btn-gray" onClick={saveFile}>💾 백업 저장</button>
+        <button className="btn btn-gray" onClick={saveFile}>💾 휴대폰에 저장</button>
         <button className="btn btn-gray" onClick={() => file.current?.click()}>📂 불러오기</button>
       </div>
       <input ref={file} type="file" accept=".json,application/json" hidden onChange={e => {
         const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
         f.text().then(t => { const j = JSON.parse(t); if (!Array.isArray(j?.trades)) throw 0; if (confirm(`매매 ${j.trades.length}건이 든 백업이에요. 지금 기록을 바꿀까요?`)) { restore(j); say("불러왔어요"); } }).catch(() => say("매매일지 백업 파일이 아니에요"));
       }} />
-      <p className="text-xs muted">기록은 이 휴대폰에만 저장돼요. 휴대폰을 바꾸기 전에 백업을 저장해 주세요.</p>
+      <p className="text-xs leading-relaxed muted">기록은 이 휴대폰에만 저장돼요. <b>💬 카톡으로 백업 보내기</b>를 누르고 공유 창에서 카카오톡 → <b>나와의 채팅</b>을 고르면 편해요.
+        되살릴 때는 카톡에서 그 파일을 눌러 <b>저장</b>한 뒤 <b>📂 불러오기</b>로 고르세요.</p>
     </section>
   );
 }

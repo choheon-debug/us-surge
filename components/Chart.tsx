@@ -1,12 +1,14 @@
 "use client";
 // 📈 차트: 1분 / 5분 / 일봉 캔들. 거래정지 구간은 주황 띠. 빨강 오름 · 파랑 내림
 import { useEffect, useState } from "react";
-import { etDate, etHm } from "@/lib/time";
+import { etDate, etHm, etToIso } from "@/lib/time";
 import type { Bar } from "@/lib/types";
 
 type Data = { bars: Bar[]; prevClose: number | null; halts: { halt: string; resume: string | null; code: string }[] };
 
-export default function Chart({ ticker, date }: { ticker: string; date: string }) {
+export type Mark = { date: string; time?: string; side: "buy" | "sell"; price: number };
+
+export default function Chart({ ticker, date, marks = [] }: { ticker: string; date: string; marks?: Mark[] }) {
   const [i, setI] = useState<"1m" | "5m" | "1d">("5m");
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(""), [loading, setLoading] = useState(true);
   const [pick, setPick] = useState<Bar | null>(null);
@@ -52,6 +54,17 @@ export default function Chart({ ticker, date }: { ticker: string; date: string }
           </g>;
         })}
         {xl.map(k => <text key={k} x={X(bars[k].t)} y={H - 4} fontSize="9" textAnchor="middle" fill="#8a9099">{i === "1d" ? bars[k] && etDate(bars[k].t).slice(5).replace("-", "/") : etHm(bars[k].t)}</text>)}
+        {marks.map((mk, k) => {
+          // 내 매매: 분봉은 시각이 있으면 그 자리, 없으면 왼쪽 끝에 가격 선 · 일봉은 그날 봉 위치
+          if (mk.price < y0 || mk.price > y1) return null;
+          let x: number | null = null;
+          if (i === "1d") { const b = bars.find(z => etDate(z.t) === mk.date); if (b) x = X(b.t) + bw / 2; }
+          else if (mk.date === date && mk.time) x = X(Math.min(t1, Math.max(t0, new Date(etToIso(mk.date, mk.time) ?? 0).getTime())));
+          else if (mk.date !== date) return null;
+          const c = mk.side === "buy" ? "#e0352b" : "#2563eb", y = Y(mk.price);
+          if (x == null) return <g key={`m${k}`}><line x1={PL} x2={W - PR} y1={y} y2={y} stroke={c} strokeDasharray="2 3" strokeWidth="0.8" /><text x={PL + 2} y={y - 2} fontSize="8" fill={c}>{mk.side === "buy" ? "내 매수" : "내 매도"} {mk.price}</text></g>;
+          return <path key={`m${k}`} d={mk.side === "buy" ? `M${x} ${y + 3} l-4 7 h8 z` : `M${x} ${y - 3} l-4 -7 h8 z`} fill={c} stroke="#fff" strokeWidth="0.8" />;
+        })}
         {pick && <line x1={X(pick.t) + bw / 2} x2={X(pick.t) + bw / 2} y1={PT} y2={H - PB + 26} stroke="#16181d" strokeWidth="0.5" />}
       </svg>
     );
@@ -68,7 +81,7 @@ export default function Chart({ ticker, date }: { ticker: string; date: string }
       {!loading && err && <p className="py-8 text-center text-sm muted">{err}</p>}
       {!loading && body}
       {pick ? <p className="num text-xs">{i === "1d" ? etDate(pick.t) : `ET ${etHm(pick.t)}`} · 시 {pick.o} · 고 {pick.h} · 저 {pick.l} · 종 <b>{pick.c}</b> · 거래량 {pick.v.toLocaleString()}</p>
-        : <p className="text-xs muted"><span className="rounded bg-[#fde7d2] px-1 text-[var(--amber)]">⏸</span> 거래정지 구간 · 점선 = 전날 종가 · 프리·애프터 포함 · 손가락으로 대면 값이 보여요</p>}
+        : <p className="text-xs muted"><span className="rounded bg-[#fde7d2] px-1 text-[var(--amber)]">⏸</span> 거래정지 구간 · 점선 = 전날 종가{marks.length ? " · ▲ 내 매수 ▼ 내 매도" : ""} · 프리·애프터 포함 · 손가락으로 대면 값이 보여요</p>}
     </section>
   );
 }

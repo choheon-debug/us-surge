@@ -5,13 +5,15 @@ import { etHm, kstHm, money, prettyDate, signed, volText } from "@/lib/time";
 import type { Analysis } from "@/lib/claude";
 import type { Row } from "@/lib/types";
 import Chart from "./Chart";
+import { TradeRow } from "./Journal";
+import { compute, px, type Side, type Trade } from "@/lib/journal";
 
-type Props = { date: string; row: Row; onBack: () => void; watched: boolean; onWatch: () => void; onAsk: () => void };
+type Props = { date: string; row: Row; onBack: () => void; watched: boolean; onWatch: () => void; onAsk: () => void; trades: Trade[]; fx: number; onTrade: (s: Side) => void; onEditTrade: (t: Trade) => void };
 const KIND = { "호재 발표": "tag-g", 뉴스: "tag-n", 테마: "tag-a", "이유 불명": "tag-r", 악재: "tag-r" } as const;
 const TONE = { 긍정: "tag-g", 부정: "tag-r", 중립: "tag-n" } as const;
 const LV = { ok: "text-[var(--acc)]", mid: "text-[var(--amber)]", bad: "up" } as const;
 
-export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk }: Props) {
+export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk, trades, fx, onTrade, onEditTrade }: Props) {
   const [r, setR] = useState(row);
   const [a, setA] = useState<{ analysis: Analysis; at: string } | null>(null);
   const [busy, setBusy] = useState(false), [status, setStatus] = useState(""), [err, setErr] = useState("");
@@ -66,7 +68,17 @@ export default function StockDetail({ date, row, onBack, watched, onWatch, onAsk
         </div>
       </section>
 
-      <Chart ticker={r.ticker} date={date} />
+      <Chart ticker={r.ticker} date={date} marks={trades.map(t => ({ date: t.date, time: t.time, side: t.side, price: t.price }))} />
+
+      {(() => { const { closed, positions } = compute(trades), pos = positions[0], cm = new Map(closed.map(c => [c.trade.id, c]));
+        return <section className="card mb-3">
+          <div className="mb-1 flex items-baseline justify-between"><b>📒 내 매매</b>{pos ? <span className="text-xs muted">보유 {pos.qty.toLocaleString()}주 · 평단 {px(pos.avg)}</span> : <span className="text-xs muted">{trades.length ? "보유 없음" : "기록 없음"}</span>}</div>
+          {[...trades].sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at).map(t => <TradeRow key={t.id} t={t} c={cm.get(t.id)} fx={fx} onEdit={() => onEditTrade(t)} />)}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button className="btn !bg-[var(--up)] text-white" onClick={() => onTrade("buy")}>＋ 매수 기록</button>
+            <button className="btn !bg-[var(--dn)] text-white" disabled={!pos} onClick={() => onTrade("sell")}>－ 매도 기록</button>
+          </div>
+        </section>; })()}
 
       {r.halts.length > 0 && <section className="card mb-3">
         <div className="mb-1 flex justify-between"><b>⏸ 거래정지 기록</b><span className="text-xs muted">ET (한국)</span></div>

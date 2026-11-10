@@ -1,6 +1,6 @@
 "use client";
-// 미국 급등주·거래정지: 📅 급등(달력 → 그날 거래정지·급등) · 💬 질문 · ⭐ 관심 · 📊 검증
-import { useCallback, useEffect, useState } from "react";
+// 미국 급등주·매매일지: 📅 급등(달력 → 그날 거래정지·급등) · 💬 질문 · 📒 일지(달력·보유·통계·복기) · 📊 검증
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStored } from "@/lib/store";
 import { lastTradingDay, marketOpen, todayEt } from "@/lib/time";
 import type { Day, Row } from "@/lib/types";
@@ -8,13 +8,15 @@ import Calendar from "./Calendar";
 import DayList from "./DayList";
 import StockDetail from "./StockDetail";
 import Chat from "./Chat";
-import Watch from "./Watch";
+import Journal from "./Journal";
+import TradeForm, { type TradeInit } from "./TradeForm";
+import { compute, DEFAULT_SETTINGS, type JSettings, type Review, type Trade } from "@/lib/journal";
 import Verify, { type Seen } from "./Verify";
 
 export type WatchItem = { ticker: string; name: string; date: string; price: number | null; rate: number | null };
 
 export default function App() {
-  const [tab, setTab] = useState<"surge" | "chat" | "watch" | "verify">("surge");
+  const [tab, setTab] = useState<"surge" | "chat" | "journal" | "verify">("surge");
   const [date, setDate] = useState(lastTradingDay);
   const [month, setMonth] = useState(() => lastTradingDay().slice(0, 7));
   const [haltCounts, setHaltCounts] = useState<Record<string, number>>({});
@@ -24,10 +26,22 @@ export default function App() {
   const [open, setOpen] = useState<{ date: string; row: Row } | null>(null);
   const [watch, setWatch] = useStored<WatchItem[]>("us.watch", []);
   const [seen, setSeen] = useStored<Seen>("us.seen", {});
+  const [trades, setTrades] = useStored<Trade[]>("us.trades", []);
+  const [reviews, setReviews] = useStored<Record<string, Review>>("us.reviews", {});
+  const [jset, setJset] = useStored<JSettings>("us.jset", DEFAULT_SETTINGS);
+  const [liveFx, setLiveFx] = useState<number | null>(null);
+  const [form, setForm] = useState<TradeInit | null>(null);
+  const formRef = useRef<TradeInit | null>(null);
+  formRef.current = form;
   const [preset, setPreset] = useState("");
   const [toast, setToast] = useState("");
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 2500); }, []);
   const clearPreset = useCallback(() => setPreset(""), []);
+
+  useEffect(() => { fetch("/api/fx").then(r => r.ok ? r.json() : null).then(j => j?.fx && setLiveFx(j.fx)).catch(() => {}); }, []);
+  const settings = { ...DEFAULT_SETTINGS, ...jset };
+  const fx = settings.fxAuto ? liveFx ?? settings.fx : settings.fx;
+  const held = (t: string) => compute(trades).positions.find(x => x.ticker === t)?.qty ?? 0;
 
   useEffect(() => {
     fetch(`/api/month?m=${month}`).then(r => r.json()).then(j => setHaltCounts(j.halts ?? {})).catch(() => {});
@@ -55,10 +69,14 @@ export default function App() {
   }, [date, loadDay]);
 
   useEffect(() => {
-    const onPop = () => setOpen(null);
+    // 뒤로가기: 기록 화면이 열려 있으면 그것만 닫고, 아니면 종목 화면을 닫는다
+    const onPop = () => { if (formRef.current) setForm(null); else setOpen(null); };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+  const openForm = (init: TradeInit) => { history.pushState({ form: 1 }, ""); setForm(init); scrollTo(0, 0); };
+  const saveTrade = (t: Trade) => { setTrades(p => [...p.filter(x => x.id !== t.id), t]); history.back(); say(`${t.ticker} ${t.side === "buy" ? "매수" : "매도"}를 기록했어요`); };
+  const openTicker = (t: string, d: string) => openRow(d, { ticker: t, name: "", market: "", price: null, rate: null, dollarVol: null, volRatio: null, halts: [], haltedNow: false });
   const openRow = (d: string, row: Row) => { history.pushState({ t: row.ticker }, ""); setOpen({ date: d, row }); scrollTo(0, 0); };
   const toggleWatch = (d: string, r: Row) => {
     const has = watch.some(w => w.ticker === r.ticker);
@@ -66,10 +84,22 @@ export default function App() {
     say(has ? "관심종목에서 뺐어요" : "관심종목에 넣었어요");
   };
 
+  if (form) return (
+    <main className="mx-auto max-w-xl px-4 pb-16 pt-4">
+      <TradeForm init={form} settings={settings} fx={fx} held={held} onSave={saveTrade} onBack={() => history.back()}
+        onDelete={id => { setTrades(p => p.filter(x => x.id !== id)); history.back(); say("지웠어요"); }}
+        onAddStrategy={s => setJset({ ...settings, strategies: [...settings.strategies, s] })} />
+      {toast && <Toast text={toast} />}
+    </main>
+  );
+
   if (open) return (
     <main className="mx-auto max-w-xl px-4 pb-16 pt-4">
       <StockDetail date={open.date} row={open.row} onBack={() => history.back()}
         watched={watch.some(w => w.ticker === open.row.ticker)} onWatch={() => toggleWatch(open.date, open.row)}
+        trades={trades.filter(t => t.ticker === open.row.ticker)} fx={fx}
+        onTrade={side => openForm({ side, ticker: open.row.ticker, date: open.date, price: open.row.price ?? undefined, qty: side === "sell" ? held(open.row.ticker) || undefined : undefined })}
+        onEditTrade={t => openForm(t)}
         onAsk={() => { setPreset(`${open.row.ticker} ${open.date.slice(5).replace("-", "/")}에 왜 올랐어(멈췄어)? 위험한 점도 알려 줘`); history.back(); setTab("chat"); setDate(open.date); }} />
       {toast && <Toast text={toast} />}
     </main>
@@ -78,9 +108,9 @@ export default function App() {
   const gainCounts = Object.fromEntries(Object.entries(seen).map(([d, s]) => [d, s.gainers]));
   return (
     <main className="mx-auto max-w-xl px-4 pb-16 pt-[max(env(safe-area-inset-top),1rem)]">
-      <h1 className="mb-3 mt-1 text-2xl font-extrabold">🇺🇸 급등주·거래정지</h1>
+      <h1 className="mb-3 mt-1 text-2xl font-extrabold">🇺🇸 급등주·매매일지</h1>
       <div className="card mb-3 grid grid-cols-4 gap-1 !rounded-full !p-1">
-        {([["surge", "📅 급등"], ["chat", "💬 질문"], ["watch", "⭐ 관심"], ["verify", "📊 검증"]] as const).map(([k, l]) => (
+        {([["surge", "📅 급등"], ["chat", "💬 질문"], ["journal", "📒 일지"], ["verify", "📊 검증"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} className={`rounded-full py-2 text-[0.85rem] font-bold ${tab === k ? "bg-[var(--acc)] text-white" : "muted"}`}>{l}</button>
         ))}
       </div>
@@ -90,9 +120,12 @@ export default function App() {
         <Calendar month={month} setMonth={setMonth} date={date} setDate={setDate} halts={haltCounts} gainers={gainCounts} />
         <DayList date={date} day={day} loading={loading} err={err} onOpen={r => openRow(date, r)} />
       </>}
-      {tab === "chat" && <Chat date={date} day={day} goSurge={() => setTab("surge")} preset={preset} clearPreset={clearPreset} />}
-      {tab === "watch" && <Watch items={watch} onOpen={w => openRow(w.date, { ticker: w.ticker, name: w.name, market: "", price: w.price, rate: w.rate, dollarVol: null, volRatio: null, halts: [], haltedNow: false })}
-        onRemove={t => setWatch(p => p.filter(w => w.ticker !== t))} />}
+      {tab === "chat" && <Chat date={date} day={day} journal={journalText(trades)} goSurge={() => setTab("surge")} preset={preset} clearPreset={clearPreset} />}
+      {tab === "journal" && <Journal trades={trades} reviews={reviews} setReviews={setReviews} settings={settings} setSettings={setJset} fx={fx} liveFx={liveFx}
+        watch={watch} onRemoveWatch={t => setWatch(p => p.filter(w => w.ticker !== t))} onOpenTicker={openTicker}
+        onNew={init => openForm({ side: "buy", ...init })} onEdit={t => openForm(t)} say={say}
+        backup={() => ({ app: "us-surge-journal", savedAt: new Date().toISOString(), trades, reviews, settings, watch })}
+        restore={j => { const b = j as { trades: Trade[]; reviews?: Record<string, Review>; settings?: JSettings; watch?: typeof watch }; setTrades(b.trades); if (b.reviews) setReviews(b.reviews); if (b.settings) setJset(b.settings); if (b.watch) setWatch(b.watch); }} />}
       {tab === "verify" && <Verify seen={seen} />}
 
       <footer className="mt-8 border-t border-[var(--line)] pt-4 text-xs leading-relaxed muted">
@@ -129,4 +162,15 @@ function Search({ date, onOpen }: { date: string; onOpen: (r: Row) => void }) {
 
 function Toast({ text }: { text: string }) {
   return <div className="fixed inset-x-0 bottom-6 z-50 mx-auto w-fit rounded-full bg-[#1f2329] px-4 py-2 text-sm font-bold text-white shadow-lg">{text}</div>;
+}
+
+/** 💬 질문에 함께 보내는 내 매매 요약 (최근 40건 + 보유) */
+function journalText(trades: Trade[]) {
+  if (!trades.length) return "";
+  const { closed, positions } = compute(trades);
+  const pnl = new Map(closed.map(c => [c.trade.id, c]));
+  const recent = [...trades].sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at).slice(0, 40);
+  return [`[내 매매일지 · 달러 기준]`,
+    ...recent.map(t => { const c = pnl.get(t.id); return `${t.date} ${t.time ?? ""} ${t.ticker} ${t.side === "buy" ? "매수" : "매도"} ${t.qty}주 @${t.price}${c ? ` 손익 ${c.pnl.toFixed(0)}$ (${c.pct.toFixed(1)}%)` : ""}${t.strategy ? ` 전략:${t.strategy}` : ""}${t.mood ? ` 마음:${t.mood}` : ""}${t.stop ? ` 손절가:${t.stop}` : ""}${t.memo ? ` 메모:${t.memo.slice(0, 60)}` : ""}`; }),
+    `[보유] ${positions.map(x => `${x.ticker} ${x.qty}주 평단 ${x.avg.toFixed(2)}`).join(", ") || "없음"}`].join("\n");
 }

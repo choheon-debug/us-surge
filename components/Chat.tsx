@@ -6,11 +6,11 @@ import { prettyDate } from "@/lib/time";
 import type { ChatMsg } from "@/lib/claude";
 import type { Day } from "@/lib/types";
 
-const EXAMPLES = ["오늘 T1(뉴스 대기)로 멈춘 종목은 왜 멈췄어?", "LUDP 변동성 정지는 어떻게 걸려?", "오늘 정지가 가장 많이 걸린 종목은 왜 올랐어?", "역분할·ATM 희석이 뭐야? 왜 위험해?"];
+const EXAMPLES = ["오늘 T1(뉴스 대기)로 멈춘 종목은 왜 멈췄어?", "LUDP 변동성 정지는 어떻게 걸려?", "오늘 정지가 가장 많이 걸린 종목은 왜 올랐어?", "역분할·ATM 희석이 뭐야? 왜 위험해?", "내 매매일지 보고 고칠 습관 알려 줘"];
 
-type Props = { date: string; day: Day | null; goSurge: () => void; preset?: string; clearPreset?: () => void };
+type Props = { date: string; day: Day | null; journal?: string; goSurge: () => void; preset?: string; clearPreset?: () => void };
 
-export default function Chat({ date, day, goSurge, preset, clearPreset }: Props) {
+export default function Chat({ date, day, journal, goSurge, preset, clearPreset }: Props) {
   const [msgs, setMsgs] = useStored<ChatMsg[]>("us.chat", []);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,7 +28,7 @@ export default function Chat({ date, day, goSurge, preset, clearPreset }: Props)
     setText(""); setBusy(true); setErr(""); setStatus("");
     let answer = "";
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, messages: history.slice(-12) }) });
+      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, journal: journal || undefined, messages: history.slice(-12) }) });
       if (!res.ok || !res.body) throw new Error((await res.json().catch(() => null))?.error || "질문을 보내지 못했어요");
       const reader = res.body.getReader(), dec = new TextDecoder();
       let buf = "";

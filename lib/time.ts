@@ -48,5 +48,5 @@ export function money(x: number) {
   return `$${Math.round(x)}`;
 }
 /** 전일 대비 거래량 증가율(%) → 10배 넘으면 "85배", 아니면 "+340%" */
-export const volText = (pct: number) => (pct >= 900 ? `${Math.round(pct / 100 + 1).toLocaleString()}배` : `+${pct.toLocaleString()}%`);
+export const volText = (pct: number) => (pct >= 900 ? `${Math.round(pct / 100 + 1).toLocaleString()}배` : pct < 0 ? `−${Math.abs(pct).toLocaleString()}%` : `+${pct.toLocaleString()}%`);
 export const signed = (x: number, d = 1) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(d)}%`;

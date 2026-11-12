@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { uid } from "@/lib/store";
 import { todayEt } from "@/lib/time";
+import { openPhoto } from "./PhotoView";
 import { krwToo, MOODS, usd, type JSettings, type Side, type Trade } from "@/lib/journal";
 
 export type TradeInit = Partial<Trade> & { side: Side };
@@ -106,7 +107,7 @@ export default function TradeForm({ init, settings, fx, held, onSave, onDelete, 
           <textarea className="inp min-h-[4.5rem]" value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: FDA 뉴스 후 첫 눌림, 거래량 확인" /></label>
         <div className="flex items-center gap-2">
           <button className="btn btn-gray !py-2 text-sm" onClick={() => file.current?.click()}>📷 차트 사진 {photo ? "바꾸기" : "넣기"}</button>
-          {photo && <><img src={photo} alt="차트 사진" className="h-12 rounded-lg" /><button className="text-sm muted" onClick={() => setPhoto("")}>빼기</button></>}
+          {photo && <><button onClick={() => openPhoto(photo, `${t || "차트"} 사진`)} aria-label="차트 사진 크게 보기" className="relative"><img src={photo} alt="차트 사진" className="h-12 rounded-lg" /><span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[0.6rem] text-white">🔍</span></button><button className="text-sm muted" onClick={() => setPhoto("")}>빼기</button></>}
           <input ref={file} type="file" accept="image/*" hidden onChange={e => { const fl = e.target.files?.[0]; e.target.value = ""; if (fl) pickPhoto(fl); }} />
         </div>
         {err && <p className="text-sm text-[var(--red)]">{err}</p>}

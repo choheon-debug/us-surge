@@ -1,4 +1,5 @@
 "use client";
+import { openPhoto } from "./PhotoView";
 // 📒 매매일지: 달력(실현 손익) · 보유(+관심) · 통계(전략·마음별) · 복기(주간) · ⚙ 설정·백업
 import { useEffect, useRef, useState } from "react";
 import { isHoliday, prettyDate, signed, todayEt } from "@/lib/time";
@@ -103,7 +104,7 @@ function TickerGroup({ ticker, list, cmap, fx, onEdit, onOpen }: { ticker: strin
       <div className="flex items-center gap-2.5">
         <button onClick={onOpen} className="grid h-10 w-12 shrink-0 place-items-center rounded-xl bg-[#6366f1] text-[0.72rem] font-extrabold text-white">{ticker.slice(0, 5)}</button>
         <div className="min-w-0 flex-1"><b>{ticker}</b> <span className="text-xs muted">{(() => { const b = list.filter(t => t.side === "buy").length, sl = list.length - b; return [b && `매수 ${b}`, sl && `매도 ${sl}`].filter(Boolean).join(" · "); })()}</span>
-          <div className="flex flex-wrap gap-1">{tags.map(x => <span key={x} className={`tag ${/[😌😨😤🤑]/u.test(x) ? "tag-a" : "tag-g"}`}>{x}</span>)}{list.some(t => t.photo) && <span className="text-xs">📷</span>}</div></div>
+          <div className="flex flex-wrap gap-1">{tags.map(x => <span key={x} className={`tag ${/[😌😨😤🤑]/u.test(x) ? "tag-a" : "tag-g"}`}>{x}</span>)}</div></div>
         {hasSell && <div className="shrink-0 text-right"><b className={`num ${pnlCls(pnl)}`}>{usd(pnl, true)}</b>{fx > 0 && <div className="text-[0.65rem] muted">{krwToo(pnl, fx, true).replace(/[()]/g, "").trim()}</div>}</div>}
       </div>
       <div className="mt-1.5 space-y-1">
@@ -113,6 +114,7 @@ function TickerGroup({ ticker, list, cmap, fx, onEdit, onOpen }: { ticker: strin
             <span className="min-w-0 flex-1 truncate num">{t.time ? <span className="muted">{t.time} </span> : null}<b>{px(t.price)}</b> × {t.qty.toLocaleString()}주</span>
             {c && <b className={`shrink-0 ${pnlCls(c.pnl)}`}>{signed(c.pct)}</b>}
           </button>; })}
+        {list.some(t => t.photo) && <div className="flex flex-wrap gap-1.5 pt-0.5">{list.filter(t => t.photo).map(t => <button key={t.id} onClick={() => openPhoto(t.photo!, `${t.ticker} ${t.side === "buy" ? "매수" : "매도"} ${t.date}${t.time ? " " + t.time : ""}`)} className="relative overflow-hidden rounded-lg border border-[var(--line)]" aria-label="차트 사진 크게 보기"><img src={t.photo} alt="" className="h-14 w-20 object-cover" /><span className="absolute bottom-0 right-0 rounded-tl bg-black/60 px-1 text-[0.6rem] text-white">🔍 {t.side === "buy" ? "매수" : "매도"}</span></button>)}</div>}
         {memo && <p className="text-xs muted">📝 {memo}</p>}
       </div>
     </div>
@@ -125,7 +127,7 @@ export function TradeRow({ t, c, fx, onEdit, onOpen }: { t: Trade; c?: Closed; f
       <button onClick={onOpen} className={`grid h-10 w-12 shrink-0 place-items-center rounded-xl text-[0.72rem] font-extrabold text-white ${t.side === "buy" ? "bg-[var(--up)]" : "bg-[var(--dn)]"}`}>{t.ticker.slice(0, 5)}</button>
       <button onClick={onEdit} className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-1"><b>{t.ticker}</b><span className={`tag ${t.side === "buy" ? "tag-r" : "tag-n"}`}>{t.side === "buy" ? "매수" : "매도"}</span>
-          {t.strategy && <span className="tag tag-g">{t.strategy}</span>}{t.mood && <span className="tag tag-a">{t.mood}</span>}{t.photo && <span className="text-xs">📷</span>}</div>
+          {t.strategy && <span className="tag tag-g">{t.strategy}</span>}{t.mood && <span className="tag tag-a">{t.mood}</span>}{t.photo && <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); openPhoto(t.photo!, `${t.ticker} ${t.side === "buy" ? "매수" : "매도"} ${t.date}`); }} className="rounded-md bg-[#eef0f3] px-1.5 text-xs">📷 보기</span>}</div>
         <div className="truncate text-xs muted">{t.time ? `${t.time} · ` : ""}{t.qty.toLocaleString()}주 · {px(t.price)} · {usd(t.side === "buy" ? t.price * t.qty + t.fee : t.price * t.qty - t.fee)}{t.memo ? ` · ${t.memo}` : ""}</div>
       </button>
       {c ? <div className="shrink-0 text-right"><b className={`num ${pnlCls(c.pnl)}`}>{usd(c.pnl, true)}</b><div className={`text-xs ${pnlCls(c.pnl)}`}>{signed(c.pct)}</div>
